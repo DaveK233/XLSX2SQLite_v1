@@ -26,6 +26,10 @@ public class Main {
         String sheetName;
         String tableName;
         ArrayList<String> fieldNames = new ArrayList<>();
+        ArrayList<String> innerList = null;
+        ArrayList<ArrayList<String>> outerList = new ArrayList<>();
+
+        /*set loading arguments*/
         sheetName = args[2];
         if(args[3] != null) {
             tableName = args[3];
@@ -42,16 +46,28 @@ public class Main {
             e.printStackTrace();
         }
         Sheet sheet = null;    // sheet number
+
+        /*read data from excel files*/
         if (wb != null) {
             sheet = wb.getSheet(sheetName);
             int stRows = sheet.getRows();   // number of non-empty rows
             int stColumns = sheet.getColumns();
-
-
+            for(int i = 0; i < stColumns; i++) {
+                fieldNames.add(sheet.getCell(i ,0).getContents());  // reading line 0 as name of fields
+            }
+            for(int i = 1; i < stRows; i++) {
+                innerList = new ArrayList<>();
+                for(int j = 0; j < stColumns; j++) {
+                    innerList.add(sheet.getCell(j, i).getContents());   // put a line into a List<String>
+                }
+                outerList.add(innerList);
+            }
             wb.close();
         }
         else {
             System.out.println("WorkBook is Empty or not existed.");
+            return;
         }
+
     }
 }
