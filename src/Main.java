@@ -69,5 +69,18 @@ public class Main {
             return;
         }
 
+        Connection conn = null;
+        Statement stat = null;
+        try {
+            Class cl = Class.forName("org.sqlite.JDBC");
+            String url = "jdbc:sqlite:" + args[0];
+            conn = DriverManager.getConnection(url);
+            stat = conn.createStatement();
+            stat.executeUpdate("drop table if exists" + tableName + ";");
+            stat.executeUpdate("Create table" + tableName + "()");
+        } catch (ClassNotFoundException | SQLException e) {
+            e.printStackTrace();
+        }
+
     }
 }
