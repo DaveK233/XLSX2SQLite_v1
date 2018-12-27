@@ -15,19 +15,24 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.regex.Pattern;
-
 import jxl.Cell;
 import jxl.Sheet;
 import jxl.Workbook;
 import jxl.read.biff.BiffException;
 import org.sqlite.JDBC;
 
-public class Main {
+public class DatabaseInput {
     public static void main(String[] args) {
+        if(args[0] == null) {
+            System.out.println("Bad input!");
+            return;
+        }
+
         String fileName = args[1];
-        String sheetName;
-        String tableName;
+        String sheetName = "";
+        String tableName = "defaultTable";
         String dbName = args[0];
+        String SQLStruct = "";
         ArrayList<String> fieldNames = new ArrayList<>();
         ArrayList<String> typeList = new ArrayList<>();
         ArrayList<String> innerList = null;
@@ -36,14 +41,22 @@ public class Main {
         int stRows, stColumns;
 
         /*set loading arguments*/
-        sheetName = args[2];
-        if(args[3] != null) {
-            tableName = args[3];
+        if(args.length >= 3) {
+            sheetName = args[2];
+            if(args.length >= 4) {
+                tableName = args[3];
+            }
+            else {
+                tableName = args[2];
+            }
         }
-        else if(args[2] != null) {
-            tableName = args[2];
+        else{
+            String[] fullName = fileName.split("\\\\");
+            if(fullName.length > 1) {
+                tableName = getFileNameNoEx(fullName[fullName.length - 1]);
+            }
         }
-        else tableName = fileName;
+
         File file = new File(fileName);
         Workbook wb = null;   // excel file to read
         try {
@@ -55,7 +68,11 @@ public class Main {
 
         /*read data from excel files*/
         if (wb != null) {
-            sheet = wb.getSheet(sheetName);
+            if(sheetName.equals("")) {
+                sheet = wb.getSheet(0);
+            }
+            else
+                sheet = wb.getSheet(sheetName);
             stRows = sheet.getRows();   // number of non-empty rows
             stColumns = sheet.getColumns();
             for(int i = 0; i < stColumns; i++) {
@@ -96,23 +113,33 @@ public class Main {
             String url = "jdbc:sqlite:" + dbName;
             StringBuilder fieldsToAdd = new StringBuilder();
             StringBuilder insertSql = new StringBuilder();
+            fieldsToAdd.append("ID integer primary key, ");
             for(int i = 0; i < stColumns - 1; i++) {
-                fieldsToAdd.append(fieldNames.get(i)).append(" ").append(typeList.get(i)).append(",");
+                fieldsToAdd.append(fieldNames.get(i)).append(" ").append(typeList.get(i)).append(", ");
             }
             fieldsToAdd.append(fieldNames.get(stColumns - 1)).append(" ").append(typeList.get(stColumns - 1));
             conn = DriverManager.getConnection(url);
             stat = conn.createStatement();
             stat.executeUpdate("drop table if exists " + tableName + ";");
-            stat.executeUpdate("Create table " + tableName + "(" + fieldsToAdd.toString()+ ");");
+            SQLStruct = "Create table " + tableName + "(" + fieldsToAdd.toString()+ ");";
+            stat.executeUpdate(SQLStruct);
             insertSql.append("insert into ").append(tableName).append(" values(?,");
             for(int i = 0; i < stColumns - 1; i++) {
                 insertSql.append("?,");
             }
             insertSql.append("?);");
             PreparedStatement prs = conn.prepareStatement(insertSql.toString());
-            for (ArrayList<String> strings : outerList) {
+            for (int i = 0; i < outerList.size(); i++) {
+                prs.setInt(1, i);
                 for (int j = 0; j < innerList.size(); j++) {
-                    prs.setString(j + 2, strings.get(j));
+                    if(typeList.get(j).equals("integer")) {
+                        prs.setInt(j+2, Integer.parseInt(outerList.get(i).get(j)));
+                    }
+                    else if(typeList.get(j).equals("real")) {
+                        prs.setDouble(j+2, Double.parseDouble(outerList.get(i).get(j)));
+                    }
+                    else
+                        prs.setString(j + 2, outerList.get(i).get(j));
                 }
                 prs.addBatch();
                 conn.setAutoCommit(false);
@@ -123,7 +150,8 @@ public class Main {
         } catch (ClassNotFoundException | SQLException e) {
             e.printStackTrace();
         }
-
+        System.out.println(SQLStruct);
+        System.out.println("Number of Rows: " + stRows);
     }
 
     private static boolean isInteger(String str) {
@@ -140,5 +168,15 @@ public class Main {
         }
         Pattern pattern = Pattern.compile("^[-\\+]?[.\\d]*$");
         return pattern.matcher(str).matches();
+    }
+
+    private static String getFileNameNoEx(String filename) {
+        if ((filename != null) && (filename.length() > 0)) {
+            int dot = filename.lastIndexOf('.');
+            if ((dot >-1) && (dot < (filename.length()))) {
+                return filename.substring(0, dot);
+            }
+        }
+        return filename;
     }
 }

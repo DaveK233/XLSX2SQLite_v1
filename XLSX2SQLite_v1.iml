@@ -11,5 +11,14 @@
     <orderEntry type="library" name="jxl" level="project" />
     <orderEntry type="library" name="poi-4.0.1" level="project" />
     <orderEntry type="library" name="poi-ooxml-4.0.1" level="project" />
+    <orderEntry type="module-library">
+      <library>
+        <CLASSES>
+          <root url="jar://D:/Download/Compressed/jexcelapi_2_6_12/jexcelapi/jxl.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+      </library>
+    </orderEntry>
   </component>
 </module>
