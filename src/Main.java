@@ -14,6 +14,8 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.regex.Pattern;
+
 import jxl.Cell;
 import jxl.Sheet;
 import jxl.Workbook;
@@ -25,9 +27,13 @@ public class Main {
         String fileName = args[1];
         String sheetName;
         String tableName;
+        String dbName = args[0];
         ArrayList<String> fieldNames = new ArrayList<>();
+        ArrayList<String> typeList = new ArrayList<>();
         ArrayList<String> innerList = null;
         ArrayList<ArrayList<String>> outerList = new ArrayList<>();
+        int maxCharLength = 0;
+        int stRows, stColumns;
 
         /*set loading arguments*/
         sheetName = args[2];
@@ -45,22 +51,36 @@ public class Main {
         } catch (IOException | BiffException e) {
             e.printStackTrace();
         }
-        Sheet sheet = null;    // sheet number
+        Sheet sheet;    // sheet number
 
         /*read data from excel files*/
         if (wb != null) {
             sheet = wb.getSheet(sheetName);
-            int stRows = sheet.getRows();   // number of non-empty rows
-            int stColumns = sheet.getColumns();
+            stRows = sheet.getRows();   // number of non-empty rows
+            stColumns = sheet.getColumns();
             for(int i = 0; i < stColumns; i++) {
                 fieldNames.add(sheet.getCell(i ,0).getContents());  // reading line 0 as name of fields
             }
             for(int i = 1; i < stRows; i++) {
                 innerList = new ArrayList<>();
                 for(int j = 0; j < stColumns; j++) {
+                    if(sheet.getCell(j, i).getContents().length() > maxCharLength) {
+                        maxCharLength = sheet.getCell(j, i).getContents().length();
+                    }
                     innerList.add(sheet.getCell(j, i).getContents());   // put a line into a List<String>
                 }
                 outerList.add(innerList);
+            }
+            for(int i = 0; i < stColumns; i++) {
+                if(isInteger(sheet.getCell(i, 1).getContents())) {
+                    typeList.add("integer");
+                }
+                else if(isDouble(sheet.getCell(i, 1).getContents())) {
+                    typeList.add("real");
+                }
+                else {
+                    typeList.add("char(" + maxCharLength + ")");
+                }
             }
             wb.close();
         }
@@ -69,18 +89,56 @@ public class Main {
             return;
         }
 
-        Connection conn = null;
-        Statement stat = null;
+        Connection conn;
+        Statement stat;
         try {
             Class cl = Class.forName("org.sqlite.JDBC");
-            String url = "jdbc:sqlite:" + args[0];
+            String url = "jdbc:sqlite:" + dbName;
+            StringBuilder fieldsToAdd = new StringBuilder();
+            StringBuilder insertSql = new StringBuilder();
+            for(int i = 0; i < stColumns - 1; i++) {
+                fieldsToAdd.append(fieldNames.get(i)).append(" ").append(typeList.get(i)).append(",");
+            }
+            fieldsToAdd.append(fieldNames.get(stColumns - 1)).append(" ").append(typeList.get(stColumns - 1));
             conn = DriverManager.getConnection(url);
             stat = conn.createStatement();
-            stat.executeUpdate("drop table if exists" + tableName + ";");
-            stat.executeUpdate("Create table" + tableName + "()");
+            stat.executeUpdate("drop table if exists " + tableName + ";");
+            stat.executeUpdate("Create table " + tableName + "(" + fieldsToAdd.toString()+ ");");
+            insertSql.append("insert into ").append(tableName).append(" values(?,");
+            for(int i = 0; i < stColumns - 1; i++) {
+                insertSql.append("?,");
+            }
+            insertSql.append("?);");
+            PreparedStatement prs = conn.prepareStatement(insertSql.toString());
+            for (ArrayList<String> strings : outerList) {
+                for (int j = 0; j < innerList.size(); j++) {
+                    prs.setString(j + 2, strings.get(j));
+                }
+                prs.addBatch();
+                conn.setAutoCommit(false);
+                prs.executeBatch();
+                conn.setAutoCommit(true);
+            }
+            conn.close();
         } catch (ClassNotFoundException | SQLException e) {
             e.printStackTrace();
         }
 
+    }
+
+    private static boolean isInteger(String str) {
+        if (null == str || "".equals(str)) {
+            return false;
+        }
+        Pattern pattern = Pattern.compile("^[-\\+]?[\\d]*$");
+        return pattern.matcher(str).matches();
+    }
+
+    private static boolean isDouble(String str) {
+        if (null == str || "".equals(str)) {
+            return false;
+        }
+        Pattern pattern = Pattern.compile("^[-\\+]?[.\\d]*$");
+        return pattern.matcher(str).matches();
     }
 }
